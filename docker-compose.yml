@@ -1,0 +1,69 @@
+version: '3'
+services:
+  app: &app_base
+    build: "."
+    stdin_open: true
+    tty: true
+    ports:
+      - $HTTP_PORT:3000
+    command: /bin/sh -c "bundle install && yarn install --check-files && bundle exec puma -C config/puma.rb"
+    environment:
+      RAILS_ENV: $RAILS_ENV
+      NODE_ENV: $RAILS_ENV
+      BUNDLE_APP_CONFIG: ./.bundle
+      DB_USER: root
+      DB_PASS:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - .:/var/www/app
+      - bundle:/var/www/app/vendor/bundle
+      - node-modules:/var/www/app/node_modules
+      - packs:/var/www/app/public/packs
+    depends_on:
+      - mysql
+      - redis
+  webpack:
+    <<: *app_base
+    command: /bin/sh -c "docker/wait-for-it.sh app:3000 --timeout=600 && bundle install && yarn install --check-files && bin/webpack-dev-server"
+    environment:
+      NODE_ENV: $RAILS_ENV
+      RAILS_ENV: $RAILS_ENV
+      BUNDLE_APP_CONFIG: ./.bundle
+      WEBPACKER_DEV_SERVER_HOST: 0.0.0.0
+    ports:
+      - $WEBPACK_PORT:3035
+    tty: true
+    stdin_open: true
+    depends_on:
+      - app
+
+  mysql:
+    stdin_open: true
+    tty: true
+    restart: always
+    platform: linux/x86_64
+    image: mysql:5.7.38
+    ports:
+      - $DB_PORT:3306
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: true
+      TZ: Asia/Tokyo
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  redis:
+    restart: always
+    image: redis:3.2.11
+    environment:
+      TZ: Asia/Tokyo
+    ports:
+      - $REDIS_PORT:6379
+    command: redis-server --appendonly yes
+
+volumes:
+  mysql-data:
+  bundle:
+  node-modules:
+  packs:
